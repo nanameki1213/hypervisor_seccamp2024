@@ -22,6 +22,7 @@ mod uefi;
 mod exception;
 mod mmio {
     pub mod pl011;
+    pub mod virt_mmio;
 }
 
 use core::ptr::write_volatile;
