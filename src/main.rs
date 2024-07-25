@@ -13,13 +13,15 @@ use core::arch::asm;
 use crate::cpu::*;
 use crate::paging::PAGE_SHIFT;
 use crate::uefi::{EfiHandle, EfiSystemTable};
+use crate::uefi::boot_service::*;
+use crate::EfiMemoryType::*;
 
 #[macro_use]
 mod console;
 mod cpu;
+mod exception;
 mod paging;
 mod uefi;
-mod exception;
 mod mmio {
     pub mod pl011;
     pub mod virt_mmio;
@@ -85,8 +87,28 @@ extern "C" fn efi_main(image_handle: EfiHandle, system_table: *mut EfiSystemTabl
 
     paging::setup_stage_2_translation().expect("Failed to setup Stage2 Paging");
 
-    paging::map_address_stage2(0x40000000, 0x40000000, 0x80000000, true, true);
-    //paging::map_address_stage2(PL011, PL011, 0x1000, true, true);
+    let memory_map_info = unsafe { &*((*SYSTEM_TABLE).efi_boot_services) }
+            .get_memory_map()
+            .expect("Failed to get memory map");
+    let descriptor_base_address = memory_map_info.descriptor_address;
+    let num_of_entries = memory_map_info.num_of_entries;
+    
+    let memory_map = unsafe {
+        &mut *core::ptr::slice_from_raw_parts_mut(descriptor_base_address as *mut EfiMemoryDescriptor, num_of_entries)
+    };
+
+    for e in memory_map[0..num_of_entries].iter_mut() {
+        let memory_type = e.memory_type;
+        let physical_start = e.physical_start;
+        let virtual_start = e.virtual_start;
+        let number_of_pages = e.number_of_pages;
+
+        if memory_type == EfiConventionalMemory {
+            paging::map_address_stage2(physical_start, virtual_start, (number_of_pages * 0x1000) as usize, true, true);
+        }
+    }
+
+    // paging::map_address_stage2(0x40000000, 0x40000000, 0x80000000, true, true);
 
     /* Stack for BSP */
     let stack_address = allocate_memory(STACK_PAGES, None).expect("Failed to alloc stack")
@@ -210,6 +232,8 @@ fn set_up_el1() {
     isb();
     set_cptr_el2(cptr_el2);
 }
+
+const VIRT_MMIO_BASE_ADDRESS: usize = 0xa000000;
 
 extern "C" fn el1_main() -> ! {
     for i in 0..3 {

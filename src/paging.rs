@@ -8,9 +8,8 @@
 //!
 //! Paging
 //!
-use core::arch::asm;
 use crate::cpu::*;
-
+use core::arch::asm;
 
 pub unsafe fn eret() -> ! {
     asm!("eret", options(noreturn))

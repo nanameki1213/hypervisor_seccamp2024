@@ -4,8 +4,9 @@
 #
 # This software is released under the MIT License.
 # http://opensource.org/licenses/mit-license.php
+
 [package]
-name = "paging_test"
+name = "mmio"
 version = "0.1.0"
 edition = "2021"
 resolver = "2"

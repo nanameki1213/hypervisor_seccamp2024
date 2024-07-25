@@ -17,8 +17,8 @@
 //!
 //! 割り込み制御
 //!
-use core::arch::global_asm;
 use crate::cpu::*;
+use core::arch::global_asm;
 
 global_asm!(
     "
@@ -172,6 +172,7 @@ exit_exception:
 
 use crate::asm;
 use crate::mmio::pl011;
+use crate::mmio::virt_mmio;
 
 #[repr(C)]
 pub struct Registers {
@@ -228,24 +229,21 @@ pub const HPFAR_EL2_FIPA: u64 = ((1 << 44) - 1) & !((1 << 4) - 1);
 extern "C" fn irq_handler() {}
 
 #[no_mangle]
-extern "C" fn synchronous_handler(registers: *mut Registers)
-{
+extern "C" fn synchronous_handler(registers: *mut Registers) {
     /*println!("Synchronous Exception!");
     println!("Fault at {:#X}", get_elr_el2());*/
     let esr_el2 = get_esr_el2();
     //println!("ESR_EL2: {:#X}", esr_el2);
     let ec = esr_el2 & ESR_EL2_EC;
     match ec {
-        ESR_EL2_EC_DATA_ABORT => data_abort_handler(unsafe {&mut *registers},
-        esr_el2),
+        ESR_EL2_EC_DATA_ABORT => data_abort_handler(unsafe { &mut *registers }, esr_el2),
         _ => {
             panic!("Unknown Exception: {}", ec >> ESR_EL2_EC_BITS_OFFSET);
         }
     }
 }
 
-pub fn setup_exception()
-{
+pub fn setup_exception() {
     extern "C" {
         static exception_table: *const u8;
     }
@@ -253,8 +251,7 @@ pub fn setup_exception()
 }
 
 // ページフォールトの原因を特定
-fn data_abort_handler(registers: &mut Registers, esr_el2: u64)
-{
+fn data_abort_handler(registers: &mut Registers, esr_el2: u64) {
     if esr_el2 & ESR_EL2_ISS_ISV == 0 {
         panic!("Data Abort Info is not available.");
     }
@@ -269,13 +266,13 @@ fn data_abort_handler(registers: &mut Registers, esr_el2: u64)
     let is_write_access = (esr_el2 & ESR_EL2_ISS_WNR) != 0;
 
     let register_number = ((esr_el2 & ESR_EL2_ISS_SRT) >> ESR_EL2_ISS_SRT_BITS_OFFSET) as usize;
-    let register: &mut u64 = 
-        &mut unsafe {&mut *(registers as *mut _ as usize as *mut [u64; 32]) }[register_number];
+    let register: &mut u64 =
+        &mut unsafe { &mut *(registers as *mut _ as usize as *mut [u64; 32]) }[register_number];
 
     let address = (((get_hpfar_el2() & HPFAR_EL2_FIPA) >> HPFAR_EL2_FIPA_BITS_OFFSET)
         << crate::paging::PAGE_SHIFT)
         | (get_far_el2() & ((1 << crate::paging::PAGE_SHIFT) - 1));
-    
+
     if (0x09000000..0x09001000).contains(&address) {
         // PL011
         let offset = (address - 0x09000000) as usize;
@@ -289,18 +286,33 @@ fn data_abort_handler(registers: &mut Registers, esr_el2: u64)
         } else {
             *register = pl011::mmio_read(offset, access_width).expect("Failed to handle MMIO");
         }
+    } else if (0xa000000..0xa0001ff).contains(&address) {
+        // virtio mmio
+        let offset = (address - 0xa000000) as usize;
+        if is_write_access {
+            let register_value = if is_64bit_resigter {
+                *register
+            } else {
+                *register & (u32::MAX as u64)
+            };
+            virt_mmio::virt_mmio_write(0x1, offset, access_width, register_value as u32)
+                .expect("Failed to handle VIRTIO MMIO");
+        } else {
+            *register = virt_mmio::virt_mmio_read(0x1, offset, access_width)
+                .expect("Failed to handle VIRTIO MMIO") as u64;
+        }
     } else {
-    println!(
-        "{:#X} {} {}{} ({} Bits)(Value: {:#X})",
-        address,
-        if is_write_access { "<=" } else { "=>" },
-        if is_64bit_resigter { "X" } else { "W" },
-        register_number,
+        println!(
+            "{:#X} {} {}{} ({} Bits)(Value: {:#X})",
+            address,
+            if is_write_access { "<=" } else { "=>" },
+            if is_64bit_resigter { "X" } else { "W" },
+            register_number,
             access_width,
             *register
         );
     }
-    unsafe {advance_elr_el2()};
+    unsafe { advance_elr_el2() };
 }
 
 pub unsafe fn advance_elr_el2() {

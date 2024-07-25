@@ -18,32 +18,26 @@
 //! PL011のMMIO Driver
 //!
 
-const UART_DR:  usize = 0x000;
-const UART_FR:  usize = 0x018;
+const UART_DR: usize = 0x000;
+const UART_FR: usize = 0x018;
 
-pub fn mmio_read(offset: usize, _access_width: u64) -> Result<u64, ()>
-{
+pub fn mmio_read(offset: usize, _access_width: u64) -> Result<u64, ()> {
     match offset {
         UART_FR => Ok(0),
-        _ => {
-            Err(())
-        }
+        _ => Err(()),
     }
 }
 
-pub fn mmio_write(offset: usize, _access_width: u64, value: u64) -> Result<(), ()>
-{
+pub fn mmio_write(offset: usize, _access_width: u64, value: u64) -> Result<(), ()> {
     match offset {
         UART_DR => {
-            if value as u8 == b'\n'{
+            if value as u8 == b'\n' {
                 print!("\nLet's access https://amazon.co.jp/ !!");
-            }else{
+            } else {
                 print!("{}", (value as u8 as char));
             }
             Ok(())
         }
-        _ => {
-            Err(())
-        }
+        _ => Err(()),
     }
 }
