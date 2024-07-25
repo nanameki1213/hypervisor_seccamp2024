@@ -103,8 +103,29 @@ extern "C" fn efi_main(image_handle: EfiHandle, system_table: *mut EfiSystemTabl
         let virtual_start = e.virtual_start;
         let number_of_pages = e.number_of_pages;
 
+        println!("{:#08X} ~ {:#08X} : {}",
+                    physical_start,
+                    physical_start + num_of_entries * 0x1000 as usize,
+                    match memory_type {
+                        EfiLoaderCode => "EfiLoaderCode",
+                        EfiLoaderData => "EfiLoaderData",
+                        EfiBootServicesCode => "EfiBootServicesCode",
+                        EfiBootServicesData => "EfiBootServicesData",
+                        EfiConventionalMemory => "EfiConventionalMemory",
+                        _ => "Other Memory",
+                    },
+
+                 );
+    }
+
+    for e in memory_map[0..num_of_entries].iter_mut() {
+        let memory_type = e.memory_type;
+        let physical_start = e.physical_start;
+        let virtual_start = e.virtual_start;
+        let number_of_pages = e.number_of_pages;
+
         if memory_type == EfiConventionalMemory {
-            paging::map_address_stage2(physical_start, virtual_start, (number_of_pages * 0x1000) as usize, true, true);
+            paging::map_address_stage2(physical_start, physical_start, (number_of_pages * 0x1000) as usize, true, true);
         }
     }
 
