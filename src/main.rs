@@ -31,6 +31,7 @@ use core::ptr::write_volatile;
 
 const PL011: usize = 0x09000000;
 
+/*
 pub struct PL011Reg {
     dr: u32,
     rsr: u32,
@@ -58,6 +59,7 @@ pub struct PL011Reg {
     pcellid2: u32,
     pcellid3: u32,
 }
+*/ 
 
 static mut IMAGE_HANDLE: EfiHandle = 0;
 static mut SYSTEM_TABLE: *const EfiSystemTable = core::ptr::null();
@@ -82,9 +84,9 @@ extern "C" fn efi_main(image_handle: EfiHandle, system_table: *mut EfiSystemTabl
         SYSTEM_TABLE = system_table;
         console::DEFAULT_CONSOLE.init((*system_table).console_output_protocol);
     }
-
+    
     assert_eq!(get_current_el() >> 2, 2, "Expected CurrentEL is EL2");
-
+    
     paging::setup_stage_2_translation().expect("Failed to setup Stage2 Paging");
 
     let memory_map_info = unsafe { &*((*SYSTEM_TABLE).efi_boot_services) }
@@ -100,12 +102,11 @@ extern "C" fn efi_main(image_handle: EfiHandle, system_table: *mut EfiSystemTabl
     for e in memory_map[0..num_of_entries].iter_mut() {
         let memory_type = e.memory_type;
         let physical_start = e.physical_start;
-        let virtual_start = e.virtual_start;
         let number_of_pages = e.number_of_pages;
 
-        println!("{:#08X} ~ {:#08X} : {}",
+        println!("{:#08X} ~ +{:#08X} : {}",
                     physical_start,
-                    physical_start + num_of_entries * 0x1000 as usize,
+                    physical_start + number_of_pages as usize * 0x1000,
                     match memory_type {
                         EfiLoaderCode => "EfiLoaderCode",
                         EfiLoaderData => "EfiLoaderData",
@@ -278,7 +279,7 @@ extern "C" fn el1_main() -> ! {
 }
 
 fn putc(c: u8) {
-    let reg: *mut PL011Reg = PL011 as *mut PL011Reg;
+    let reg = PL011;
 
     unsafe { write_volatile(reg as *mut u32, c as u32) }
 }
