@@ -104,18 +104,30 @@ extern "C" fn efi_main(image_handle: EfiHandle, system_table: *mut EfiSystemTabl
         let physical_start = e.physical_start;
         let number_of_pages = e.number_of_pages;
 
-        println!("{:#08X} ~ +{:#08X} : {}",
+        println!("{:#08X} ~ {:#08X} : {}",
                     physical_start,
-                    physical_start + number_of_pages as usize * 0x1000,
-                    match memory_type {
+                    number_of_pages,
+                    /* match memory_type {
+                        EfiReservedMemoryType => "EfiReservedMemoryType",
                         EfiLoaderCode => "EfiLoaderCode",
                         EfiLoaderData => "EfiLoaderData",
                         EfiBootServicesCode => "EfiBootServicesCode",
                         EfiBootServicesData => "EfiBootServicesData",
+                        EfiRuntimeServicesCode => "EfiRuntimeServicesCode",
+                        EfiRuntimeServicesData => "EfiRuntimeServicesData",
                         EfiConventionalMemory => "EfiConventionalMemory",
+                        EfiUnusableMemory => "EfiUnusableMemory",
+                        EfiACPIReclaimMemory => "EfiACPIReclaimMemory",
+                        EfiACPIMemoryNVS => "EfiACPIMemoryNVS",
+                        EfiMemoryMappedIO => "EfiMemoryMAppedIO",
+                        EfiMemoryMappedIOPortSpace => "EfiMemoryMappedIOPortSpace",
+                        EfiPalCode => "EfiPalCode",
+                        EfiPersistentMemory => "EfipersistentMemory",
+                        EfiMaxMemoryType => "EfiMAxMemoryType",
                         _ => "Other Memory",
                     },
-
+                    */
+                    memory_type as usize,
                  );
     }
 
