@@ -227,6 +227,8 @@ pub const ESR_EL2_ISS_WNR: u64 = 1 << 6;
 pub const ESR_EL2_EC_INSTRUCTION_ABORT: u64 = 0b100000 << 26;
 pub const ESR_EL2_ISS_IFSC_BITS_OFFSET: u64 = 0;
 pub const ESR_EL2_ISS_IFSC: u64 = 0b111111 << ESR_EL2_ISS_IFSC_BITS_OFFSET;
+pub const ESR_EL2_ISS_S1PTW_BITS_OFFSET: u64 = 7;
+pub const ESR_EL2_ISS_S1PTW: u64 = 1 << ESR_EL2_ISS_S1PTW_BITS_OFFSET;
 
 /* HPFAR_EL2 */
 pub const HPFAR_EL2_FIPA_BITS_OFFSET: u64 = 4;
@@ -332,12 +334,20 @@ pub fn instruction_abort_handler(registers: &mut Registers, esr_el2: u64) {
         0b000011 => println!("Address size fault, level 3."),
         0b000100 => println!("Translation fault, level 0."),
         0b000101 => println!("Translation fault, level 1."),
-        0b000110 => println!("Translation fault, level 2."),
+        0b000110 => {
+            println!("Translation fault, level 2.");
+            if esr_el2 & ESR_EL2_ISS_S1PTW == 0 {
+                println!("Fault not on a stage 2 translation for a stage 1 translation table walk.");
+            } else {
+                println!("Fault on the stage 2 translation of an access for a stage 1 translation table walk.");
+            }
+        },
         0b000111 => println!("Translation fault, level 3."),
         _ => {
             panic!("Unknown Instruction Abort");
         }
     }
+    panic!();
 }
 
 pub unsafe fn advance_elr_el2() {
