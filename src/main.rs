@@ -158,7 +158,6 @@ extern "C" fn efi_main(image_handle: EfiHandle, system_table: *mut EfiSystemTabl
     set_up_el1();
 
     exception::setup_exception();
-
     /* Jump to EL1(el1_main) */
     el2_to_el1(el1_main as *const fn() as usize, stack_address);
     panic!("Failed to jump EL1");

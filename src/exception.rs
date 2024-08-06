@@ -19,11 +19,13 @@
 //!
 use crate::cpu::*;
 use core::arch::global_asm;
+use core::panic;
 
 global_asm!(
     "
 .section .text
 .balign 0x800
+.global exception_table
 //.size exception_table, 0x800
 exception_table:
 
@@ -221,6 +223,11 @@ pub const ESR_EL2_ISS_SRT: u64 = 0b11111 << ESR_EL2_ISS_SRT_BITS_OFFSET;
 pub const ESR_EL2_ISS_SF: u64 = 1 << 15;
 pub const ESR_EL2_ISS_WNR: u64 = 1 << 6;
 
+/* ESR_EL2 instruction abort */
+pub const ESR_EL2_EC_INSTRUCTION_ABORT: u64 = 0b100000 << 26;
+pub const ESR_EL2_ISS_IFSC_BITS_OFFSET: u64 = 0;
+pub const ESR_EL2_ISS_IFSC: u64 = 0b111111 << ESR_EL2_ISS_IFSC_BITS_OFFSET;
+
 /* HPFAR_EL2 */
 pub const HPFAR_EL2_FIPA_BITS_OFFSET: u64 = 4;
 pub const HPFAR_EL2_FIPA: u64 = ((1 << 44) - 1) & !((1 << 4) - 1);
@@ -237,6 +244,7 @@ extern "C" fn synchronous_handler(registers: *mut Registers) {
     let ec = esr_el2 & ESR_EL2_EC;
     match ec {
         ESR_EL2_EC_DATA_ABORT => data_abort_handler(unsafe { &mut *registers }, esr_el2),
+        ESR_EL2_EC_INSTRUCTION_ABORT => instruction_abort_handler(unsafe { &mut *registers }, esr_el2),
         _ => {
             panic!("Unknown Exception: {}", ec >> ESR_EL2_EC_BITS_OFFSET);
         }
@@ -313,6 +321,23 @@ fn data_abort_handler(registers: &mut Registers, esr_el2: u64) {
         );
     }
     unsafe { advance_elr_el2() };
+}
+
+pub fn instruction_abort_handler(registers: &mut Registers, esr_el2: u64) {
+    let ifsc = esr_el2 & ESR_EL2_ISS_IFSC;
+    match ifsc {
+        0b000000 => println!("Address size fault, level 0 of translation or translation table base register."),
+        0b000001 => println!("Address size fault, level 1."),
+        0b000010 => println!("Address size fault, level 2."),
+        0b000011 => println!("Address size fault, level 3."),
+        0b000100 => println!("Translation fault, level 0."),
+        0b000101 => println!("Translation fault, level 1."),
+        0b000110 => println!("Translation fault, level 2."),
+        0b000111 => println!("Translation fault, level 3."),
+        _ => {
+            panic!("Unknown Instruction Abort");
+        }
+    }
 }
 
 pub unsafe fn advance_elr_el2() {
