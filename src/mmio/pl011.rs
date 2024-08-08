@@ -31,11 +31,7 @@ pub fn mmio_read(offset: usize, _access_width: u64) -> Result<u64, ()> {
 pub fn mmio_write(offset: usize, _access_width: u64, value: u64) -> Result<(), ()> {
     match offset {
         UART_DR => {
-            if value as u8 == b'\n' {
-                print!("\nLet's access https://amazon.co.jp/ !!");
-            } else {
-                print!("{}", (value as u8 as char));
-            }
+            print!("{}", (value as u8 as char));
             Ok(())
         }
         _ => Err(()),

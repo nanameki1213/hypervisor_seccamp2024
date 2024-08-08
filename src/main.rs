@@ -9,6 +9,8 @@
 #![no_main]
 
 use core::arch::asm;
+use core::num;
+use core::mem::MaybeUninit;
 
 use crate::cpu::*;
 use crate::paging::PAGE_SHIFT;
@@ -61,6 +63,8 @@ pub struct PL011Reg {
 }
 */ 
 
+static mut INTERRUPT_FLAG: MaybeUninit<InterruptFlag> = MaybeUninit::uninit();
+
 static mut IMAGE_HANDLE: EfiHandle = 0;
 static mut SYSTEM_TABLE: *const EfiSystemTable = core::ptr::null();
 
@@ -104,45 +108,53 @@ extern "C" fn efi_main(image_handle: EfiHandle, system_table: *mut EfiSystemTabl
         let physical_start = e.physical_start;
         let number_of_pages = e.number_of_pages;
 
+        if memory_type as u64 >=  15 {
+            panic!("Unknown Efi Memory type.");
+        }
+
+        let memory_type_str = match memory_type {
+            EfiReservedMemoryType => "EfiReservedMemoryType",
+            EfiLoaderCode => "EfiLoaderCode",
+            EfiLoaderData => "EfiLoaderData",
+            EfiBootServicesCode => "EfiBootServicesCode",
+            EfiBootServicesData => "EfiBootServicesData",
+            EfiRuntimeServicesCode => "EfiRuntimeServicesCode",
+            EfiRuntimeServicesData => "EfiRuntimeServicesData",
+            EfiConventionalMemory => "EfiConventionalMemory",
+            EfiUnusableMemory => "EfiUnusableMemory",
+            EfiACPIReclaimMemory => "EfiACPIReclaimMemory",
+            EfiACPIMemoryNVS => "EfiACPIMemoryNVS",
+            EfiMemoryMappedIO => "EfiMemoryMAppedIO",
+            EfiMemoryMappedIOPortSpace => "EfiMemoryMappedIOPortSpace",
+            EfiPalCode => "EfiPalCode",
+            EfiPersistentMemory => "EfipersistentMemory",
+            _ => {
+                panic!("Unknown Efi Memory Type.");
+            },
+        };
+
         println!("{:#08X} ~ {:#08X} : {}",
                     physical_start,
-                    number_of_pages,
-                    /* match memory_type {
-                        EfiReservedMemoryType => "EfiReservedMemoryType",
-                        EfiLoaderCode => "EfiLoaderCode",
-                        EfiLoaderData => "EfiLoaderData",
-                        EfiBootServicesCode => "EfiBootServicesCode",
-                        EfiBootServicesData => "EfiBootServicesData",
-                        EfiRuntimeServicesCode => "EfiRuntimeServicesCode",
-                        EfiRuntimeServicesData => "EfiRuntimeServicesData",
-                        EfiConventionalMemory => "EfiConventionalMemory",
-                        EfiUnusableMemory => "EfiUnusableMemory",
-                        EfiACPIReclaimMemory => "EfiACPIReclaimMemory",
-                        EfiACPIMemoryNVS => "EfiACPIMemoryNVS",
-                        EfiMemoryMappedIO => "EfiMemoryMAppedIO",
-                        EfiMemoryMappedIOPortSpace => "EfiMemoryMappedIOPortSpace",
-                        EfiPalCode => "EfiPalCode",
-                        EfiPersistentMemory => "EfipersistentMemory",
-                        EfiMaxMemoryType => "EfiMAxMemoryType",
-                        _ => "Other Memory",
-                    },
-                    */
+                    physical_start + number_of_pages as usize * 0x1000,
+                    // memory_type_str,
                     memory_type as usize,
                  );
     }
 
-    for e in memory_map[0..num_of_entries].iter_mut() {
-        let memory_type = e.memory_type;
-        let physical_start = e.physical_start;
-        let virtual_start = e.virtual_start;
-        let number_of_pages = e.number_of_pages;
+    // なぜかEFI メモリマップの情報からメモリマップしても動かない！どこかマッピング漏れがあるのかもしれない
+    // for e in memory_map[0..num_of_entries].iter_mut() {
+    //     let memory_type = e.memory_type;
+    //     let physical_start = e.physical_start;
+    //     let virtual_start = e.virtual_start;
+    //     let number_of_pages = e.number_of_pages;
 
-        if memory_type == EfiConventionalMemory {
-            paging::map_address_stage2(physical_start, physical_start, (number_of_pages * 0x1000) as usize, true, true);
-        }
-    }
+    //     if memory_type == EfiConventionalMemory ||
+    //         memory_type == EfiRuntimeServicesData {
+    //         paging::map_address_stage2(physical_start, physical_start, (number_of_pages * 0x1000) as usize, true, true);
+    //     }
+    // }
 
-    // paging::map_address_stage2(0x40000000, 0x40000000, 0x80000000, true, true);
+    paging::map_address_stage2(0x40000000, 0x40000000, 0x80000000, true, true);
 
     /* Stack for BSP */
     let stack_address = allocate_memory(STACK_PAGES, None).expect("Failed to alloc stack")
@@ -158,6 +170,7 @@ extern "C" fn efi_main(image_handle: EfiHandle, system_table: *mut EfiSystemTabl
     set_up_el1();
 
     exception::setup_exception();
+
     /* Jump to EL1(el1_main) */
     el2_to_el1(el1_main as *const fn() as usize, stack_address);
     panic!("Failed to jump EL1");
@@ -268,8 +281,8 @@ fn set_up_el1() {
 
 const VIRT_MMIO_BASE_ADDRESS: usize = 0xa000000;
 
-extern "C" fn el1_main() -> ! {
-    for i in 0..3 {
+extern "C" fn el1_main() {
+    /* for i in 0..3 {
         let _ = unsafe { core::ptr::read_volatile((0x1000 + i as usize) as *const u8) };
         unsafe { core::ptr::write_volatile((0x1000 + i as usize) as *mut u8, i) };
     }
@@ -277,6 +290,7 @@ extern "C" fn el1_main() -> ! {
         let _ = unsafe { core::ptr::read_volatile((0x1000 + (i << 3) as usize) as *const u64) };
         unsafe { core::ptr::write_volatile((0x1000 + (i << 3) as usize) as *mut u64, i) };
     }
+    */
 
     let text = "Hello,world!\nLet's make a hypervisor!!\n";
 
@@ -284,9 +298,21 @@ extern "C" fn el1_main() -> ! {
         putc(*c);
     }
 
-    loop {
-        unsafe { core::arch::asm!("wfi") }
+    // loop {
+    //     unsafe { core::arch::asm!("wfi") }
+    // }
+
+    local_irq_fiq_restore(unsafe { INTERRUPT_FLAG.assume_init_ref().clone() });
+
+    unsafe {
+        ((*(*SYSTEM_TABLE).efi_boot_services).exit)(
+            IMAGE_HANDLE,
+            uefi::EfiStatus::EfiSuccess,
+            0,
+            core::ptr::null(),
+        );
     }
+    panic!("Failed to exit");
 }
 
 fn putc(c: u8) {

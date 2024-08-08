@@ -159,7 +159,12 @@ fn _map_address_stage2(
     };
 
     if table_level == 3 {
-        println!("mapping: {:#X} to {:#X}", virtual_address, physical_address);
+        println!("mapping: {:#X} ~ {:#X} => {:#X} ~ {:#X}",
+            virtual_address, 
+            *virtual_address as usize + *remaining_size, 
+            physical_address, 
+            *physical_address as usize + *remaining_size,
+        );
         println!("level 3: {:#X}", table_address);
         for e in table[table_index..num_of_entries].iter_mut() {
             e.init();
